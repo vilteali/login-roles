@@ -1,11 +1,11 @@
 import {getRepository} from 'typeorm';
-import {NextFunction, request, Request, Response} from 'express';
+import {Request, Response} from 'express';
 import {User} from '../entity/User';
 import {validate} from 'class-validator';
 
 export class UserController {
 
-    static getAll = async (req: Request, res:Response) => {
+    static getAll = async (req: Request, res: Response) => {
       const userRespository = getRepository(User);
 
       try {
@@ -22,9 +22,9 @@ export class UserController {
       } else {
         res.send(users);
       }
-    }
+    };
     
-    static getByID = async (req: Request, res:Response) => {
+    static getById = async (req: Request, res: Response) => {
       const {id} = req.params;
       const userRepository = getRepository(User);
 
@@ -36,9 +36,9 @@ export class UserController {
         res.status(404).json({message: 'Not result'});
       }
 
-    }
+    };
 
-    static newUser = async (req: Request, res:Response) => {
+    static newUser = async (req: Request, res: Response) => {
       const {username, password, role} = req.body;
       const user = new User();
 
@@ -46,13 +46,16 @@ export class UserController {
       user.password = password;
       user.role = role;
 
-      const errors = await validate(user);
+      // validate
+      const validationOpt = {validationError: {target: false, value: false}};
+      const errors = await validate(user, validationOpt);
       if(errors.length > 0) {
         return res.status(400).json(errors);
       }
       
       const userRepository = getRepository(User);
       try{
+        user.hashPassword();
         await userRepository.save(user);
       }
       catch(e){
@@ -62,4 +65,56 @@ export class UserController {
       res.send('User created');
     }
 
+    static editUser = async (req: Request, res: Response) => {
+     let user;
+     const {id} = req.params;
+     const {username, role} = req.body;
+      
+     const userRespository = getRepository(User);
+      try{
+        user = await userRespository.findOneOrFail(id); 
+        user.username = username;
+        user.role = role;
+      }
+      catch(e){
+        return res.send(404).json({message: 'User not found'});
+      }
+
+      const validationOpt = {validationError: {target: false, value: false}};
+      const errors = await validate(user, validationOpt);
+      console.error('ERR-->', errors);
+      
+      console.log('ERR-->', errors);
+      
+      if(errors.length > 0) {
+        return res.status(400).json(errors);
+      }
+
+      try{
+        await userRespository.save(user);
+      }
+      catch(e){
+        return res.status(409).json({message: 'Username already in use'});
+      }
+      
+      res.status(201).json({message: 'User update'});
+    };
+
+    static deleteUser = async (req: Request, res:Response) => {
+      const {id} = req.params;
+      const userRespository = getRepository(User);
+      let user: User;
+
+      try{
+        user = await userRespository.findOneOrFail(id);
+      }
+      catch(e){
+        return res.status(404).json({message: 'User not found'});
+      }
+
+      userRespository.delete(id);
+      res.status(201).json({message: 'User deleted'});
+    }; 
 }
+
+export default UserController;
